@@ -1,6 +1,6 @@
 # Multi-Chamber-Bending-SPA-Generator
 
-This script is created for our final year project <strong>Soft Grippers For Automated Strawberry Harvesting</strong> soft gripper simulation<br> and this is a modified version of research script of <a href="epfl.ch">EPFL</a> University
+This script is created for our final year project <strong>Soft Grippers For Automated Strawberry Harvesting</strong> soft gripper simulation and this is a modified version of research script of <a href="epfl.ch">EPFL</a> University
 
 Multichamber bending soft pneumatic actuator generator for abaqus
 
