@@ -1,0 +1,265 @@
+1   """
+2   Implements classes for entire organisms
+3   
+4   Organisms can be mated by the '+' operator, which
+5   produces a child organism.
+6   
+7   Subclasses of Organism must override the following methods:
+8       - fitness - returns a float value representing the
+9         organism's fitness - a value from 0.0 to infinity, where
+10        lower is better
+11  """
+12  import math
+13  from random import random, choice
+14  from gene import BaseGene
+15  
+16  class Organism(object):
+17      """
+18      Simple genetic algorithms organism
+19  
+20      Contains only single genes, not pairs (ie, single-helix)
+21      
+22      Note - all organisms are hermaphrodites, which
+23      can reproduce by mating with another.
+24      In this implementation, there is no gender.
+25  
+26      Class variables (to override) are:
+27          - genome - a dict mapping gene names to gene classes
+28  
+29          - mutateOneOnly - default False - dictates whether mutation
+30            affects one randomly chosen gene unconditionally, or
+31            all genes subject to the genes' individual mutation settings
+32  
+33          - crossoverRate - default .5 - proportion of genes to
+34            split out to first child in each pair resulting from
+35            a mating
+36  
+37      Python operators supported:
+38          - + - mates two organism instances together, producing a child
+39          - [] - returns the value of the gene of a given name
+40          - <, <=, >, >= - compares fitness value to that of another instance
+41      """
+42      # dict which maps genotype names to gene classes
+43      genome = {}
+44      
+45      #default value type for a gene
+46      geneVType = type(2.0)
+47      # dictates whether mutation affects one randomly chosen
+48      # gene unconditionally, or all genes subject to the genes'
+49      # own mutation settings
+50      
+51      mutateOneOnly = False
+52      
+53      # proportion of genes to split out to first child
+54      crossoverRate = 0.5
+55      
+56      def __init__(self, *arg, **kw):
+57          """
+58          Initialises this organism randomly,
+59          or from a set of named gene keywords
+60      
+61          Arguments:
+62              - gamete1, gamete2 - a pair of gametes from which
+63                to take the genes comprising the new organism.
+64                May be omitted.
+65          
+66          Keywords:
+67              - keyword names are gene names within the organism's
+68                genome, and values are either:
+69                    - instances of a Gene subclass, or
+70                    - a Gene subclass (in which case the class will
+71                      be instantiated to form a random gene object)
+72      
+73          Any gene names in the genome, which aren't given in the
+74          constructor keywords, will be added as random instances
+75          of the respective gene class. (Recall that all Gene subclasses
+76          can be instantiated with no arguments to create a random
+77          valued gene).
+78          """
+79          # the set of genes which comprise this organism
+80          self.genes = {}
+81      
+82          # remember the gene count
+83          self.numgenes = len(self.genome)
+84          if len(arg)<=self.numgenes:
+85              arg = list(arg) + [None]*(self.numgenes-len(arg))
+86          else:
+87              arg = arg[0:self.numgenes]
+88          # we're being fed a set of zero or more genes
+89          p = 0
+90          for name, cls in self.genome.items():
+91      
+92              # set genepair from given arg, or default to a
+93              # new random instance of the gene
+94              gene = kw.get(name, cls)
+95              flag = (type(arg[p])==self.geneVType)
+96              # if we're handed a gene class instead of a gene object
+97              # we need to instantiate the gene class
+98              # to form the needed gene object
+99              try:
+100                 if issubclass(gene, BaseGene):
+101                     gene = (gene(arg[p]) if flag else gene())
+102                 else:
+103                     gene = (cls(arg[p]) if flag else cls())
+104             except:
+105                 pass
+106             # either way, we should have a valid gene now
+107             # add in the gene to our genotype
+108             self.genes[name] = gene
+109             p = p +1
+110 
+111         #record the fittness result for the org
+112         value = kw.get('FIT')
+113         if value:
+114             self.fitnessValue = value
+115         else:
+116             self.fitnessValue = self.fitness()
+117     
+118     def copy(self):
+119         """
+120         returns a deep copy of this organism
+121         """
+122         genes = {}
+123         for name, gene in self.genes.items():
+124             genes[name] = gene.copy()
+125         genes['FIT'] = self.fitnessValue
+126         return self.__class__(**genes)
+127     
+128     def mate(self, partner):
+129         """
+130         Mates this organism with another organism to
+131         produce two entirely new organisms via random choice
+132         of genes from this or the partner
+133         """
+134         genotype1 = {}
+135         genotype2 = {}
+136     
+137         # gene by gene, we assign our and partner's genes randomly
+138         for name, cls in self.genome.items():
+139             
+140             ourGene = self.genes.get(name, None)
+141             if not ourGene:
+142                 ourGene = cls()
+143     
+144             partnerGene = self.genes.get(name, None)
+145             if not partnerGene:
+146                 partnerGene = cls()
+147                 
+148             # randomly assign genes to first or second child
+149             if random() < self.crossoverRate:
+150                 genotype1[name] = ourGene
+151                 genotype2[name] = partnerGene
+152             else:
+153                 genotype1[name] = partnerGene
+154                 genotype2[name] = ourGene
+155         
+156         # got the genotypes, now create the child organisms
+157         child1 = self.__class__(**genotype1)
+158         child2 = self.__class__(**genotype2)
+159         # done
+160         return (child1, child2)
+161     
+162     def __getitem__(self, item):
+163         """
+164         allows shorthand for querying the phenotype
+165         of this organism
+166         """
+167         return self.genes[item].value
+168     
+169     def phenotype(self, geneName=None):
+170         """
+171         Returns the phenotype resulting from a
+172         given gene, OR the total phenotype resulting
+173         from all the genes
+174         
+175         tries to invoke a child class' method
+176         called 'phen_<name>'
+177         """
+178         # if no gene name specified, build up an entire
+179         # phenotype dict
+180         if geneName == None:
+181             phenotype = {}
+182             for name, cls in self.genome.items():
+183                 val = self.phenotype(name)
+184                 if not phenotype.has_key(name):
+185                     phenotype[name] = []
+186                 phenotype[name].append(val)
+187     
+188             # got the whole phenotype now
+189             return phenotype
+190     
+191         # just getting the phenotype for one gene pair
+192         return self.genes[geneName]
+193     
+194     def mutate(self):
+195         """
+196         Implement the mutation phase, invoking
+197         the stochastic mutation method on each
+198         component gene
+199         
+200         Does not affect this organism, but returns a mutated
+201         copy of it
+202         """
+203         mutant = self.copy()
+204         
+205         if self.mutateOneOnly:
+206             # unconditionally mutate just one gene
+207             gene = choice(mutant.genes.values())
+208             gene.mutate()
+209     
+210         else:
+211             # conditionally mutate all genes
+212             for gene in mutant.genes.values():
+213                 gene.maybeMutate()
+214     
+215         return mutant
+216     
+217     def __add__(self, partner):
+218         """
+219         Allows '+' operator for sexual reproduction
+220     
+221         Returns a whole new organism object, whose
+222         gene pair for each gene name are taken as one
+223         gene randomly selected from each parent
+224         """
+225         return self.mate(partner)
+226     
+227     def fitness(self):
+228         """
+229         Return the fitness level of this organism, as a float
+230         
+231         Should return a number from 0.0 to infinity, where
+232         0.0 means 'perfect'
+233     
+234         Organisms should evolve such that 'fitness' converges
+235         to zero.
+236         
+237         This method must be overridden
+238         """
+239         raise Exception("Method 'fitness' not implemented")
+240     
+241     def duel(self, opponent):
+242         """
+243         Duels this organism against an opponent
+244         
+245         Returns -1 if this organism loses, 0 if it's
+246         a tie, or 1 if this organism wins
+247         """
+248         return cmp(self.fitnessValue, opponent.fitnessValue)
+249     
+250     def __cmp__(self, other):
+251         """
+252         Convenience method which invokes duel
+253         
+254         Allows lists of organisms to be sorted
+255         """
+256         return self.duel(other)
+257     
+258     def __repr__(self):
+259         """
+260         Delivers a minimal string representation
+261         of this organism.
+262         
+263         Override if needed
+264         """
+265         return "<%s:%s>" % (self.__class__.__name__, self.fitnessValue)

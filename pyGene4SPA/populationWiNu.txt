@@ -1,0 +1,315 @@
+1   """
+2   pygene/population.py - Represents a population of organisms
+3   """
+4   
+5   import random
+6   from random import randrange, choice
+7   from math import sqrt
+8   from organism import Organism
+9   
+10  class Population(object):
+11      """
+12      Represents a population of organisms
+13  
+14      You might want to subclass this
+15      
+16      Overridable class variables:
+17  
+18          - species - Organism class or subclass, being the 'species'
+19            of organism comprising this population
+20  
+21          - initPopulation - size of population to randomly create
+22            if no organisms are passed in to constructor
+23  
+24          - childCull - cull to this many children after each generation
+25  
+26          - childCount - number of children to create after each generation
+27  
+28          - incest - max number of best parents to mix amongst the
+29            kids for next generation, default 10
+30  
+31          - numNewOrganisms - number of random new orgs to add each
+32            generation, default 0
+33  
+34          - initPopulation - initial population size, default 10
+35  
+36          - mutants - default 0.1 - if mutateAfterMating is False,
+37            then this sets the percentage of mutated versions of
+38            children to add to the child population; children to mutate
+39            are selected based on fitness
+40  
+41      Supports the following python operators:
+42  
+43          - + - produces a new population instances, whose members are
+44            an aggregate of the members of the values being added
+45  
+46          - [] - int subscript - returns the ith fittest member
+47  
+48      """
+49      # cull to this many children after each generation
+50      childCull = 20
+51      
+52      # number of children to create after each generation
+53      childCount = 100
+54      
+55      # max number of best parents to mix amongst the kids for
+56      # next generation
+57      incest = 10
+58      
+59      # parameters governing addition of random new organisms
+60      numNewOrganisms = 0 # number of new orgs to add each generation
+61      
+62      # set to initial population size
+63      initPopulation = 10
+64      
+65      # set to species of organism
+66      species = Organism
+67      
+68      # mutate this proportion of organisms
+69      mutants = 0.1
+70      
+71      # set this to true to mutate all progeny
+72      mutateAfterMating = True
+73      
+74      def __init__(self, *items, **kw):
+75          """
+76          Create a population with zero or more members
+77          
+78          Arguments:
+79              - any number of arguments and/or sequences of args,
+80                where each arg is an instance of this population's
+81                species. If no arguments are given, organisms are
+82                randomly created and added automatically, according
+83                to self.initPopulation and self.species
+84          
+85          Keywords:
+86              - init - size of initial population to randomly create.
+87                Ignored if 1 or more constructor arguments are given.
+88                if not given, value comes from self.initPopulation
+89              - species - species of organism to create and add. If not
+90                given, value comes from self.species
+91          """
+92          self.organisms = []
+93          if kw.has_key('species'):
+94              self.species = kw['species']
+95  
+96          if kw.has_key('init'):
+97              self.initPopulation = kw['init']
+98          
+99          if not items:
+100             for i in xrange(self.initPopulation):
+101                 self.add(self.species())
+102         else:
+103             self.add(*items)
+104             flag = self.initPopulation-len(items)
+105             if flag>0:
+106                 for i in xrange(flag):
+107                     self.add(self.species())
+108     
+109     def add(self, *args):
+110         """
+111         Add an organism, or a population of organisms,
+112         to this population
+113     
+114         You can also pass lists or tuples of organisms and/or
+115         populations, to any level of nesting
+116         """
+117         for arg in args:
+118             if isinstance(arg, tuple) or isinstance(arg, list):
+119                 # got a list of things, add them one by one
+120                 self.add(*arg)
+121     
+122             if isinstance(arg, Organism):
+123                 # add single organism
+124                 self.organisms.append(arg)
+125     
+126             elif isinstance(arg, Population):
+127                 # absorb entire population
+128                 self.organisms.extend(arg)
+129             else:
+130                 raise TypeError(
+131                     "can only add Organism or Population objects")
+132         
+133         self.sorted = False
+134     
+135     def __add__(self, other):
+136         """
+137         Produce a whole new population consisting of an aggregate
+138         of this population and the other population's members
+139         """
+140         return Population(self, other)
+141     
+142     def getRandom(self, items=None):
+143         """
+144         randomly select one of the given items
+145         (or one of this population's members, if items
+146         not given).
+147         
+148         Favours fitter members
+149         """
+150         if items == None:
+151             items = self.organisms
+152     
+153         nitems = len(items)
+154         n2items = nitems * nitems
+155     
+156         # pick one parent randomly, favouring fittest
+157         idx = int(sqrt(randrange(n2items)))
+158         return items[nitems - idx - 1]
+159     
+160     def gen(self, nfittest=None, nchildren=None):
+161         """
+162         Executes a generation of the population.
+163         
+164         This consists of:
+165             - producing 'nchildren' children, parented by members
+166               randomly selected with preference for the fittest
+167             - culling the children to the fittest 'nfittest' members
+168             - killing off the parents, and replacing them with the
+169               children
+170     
+171         Read the source code to study the method of probabilistic
+172         selection.
+173         """
+174         if not nfittest:
+175             nfittest = self.childCull
+176         if not nchildren:
+177             nchildren = self.childCount
+178     
+179         children = []
+180     
+181         # add in some new random organisms, if required
+182         if self.numNewOrganisms:
+183             for i in xrange(self.numNewOrganisms):
+184                 self.add(self.species())
+185     
+186         # we use square root to skew the selection probability to
+187         # the fittest
+188     
+189         # get in order, if not already
+190         self.sort()
+191         nadults = len(self)
+192         
+193         n2adults = nadults * nadults
+194     
+195         # statistical survey
+196         #stats = {}
+197         #for j in xrange(nchildren):
+198         #    stats[j] = 0
+199             
+200         # wild orgy, have lots of children    
+201         for i in xrange(nchildren):
+202             # pick one parent randomly, favouring fittest
+203             idx1 = idx2 = int(sqrt(randrange(n2adults)))
+204             parent1 = self[-idx1]
+205     
+206             # pick another parent, distinct from the first parent
+207             while idx2 == idx1:
+208                 idx2 = int(sqrt(randrange(n2adults)))
+209             parent2 = self[-idx2]
+210     
+211             #print "picking items %s, %s of %s" % (
+212             #    nadults - idx1 - 1,
+213             #    nadults - idx2 - 1,
+214             #    nadults)
+215     
+216             #stats[nadults - idx1 - 1] += 1
+217             #stats[nadults - idx2 - 1] += 1
+218     
+219             # get it on, and store the child
+220             child1, child2 = parent1 + parent2
+221             
+222             # mutate kids if required
+223             if self.mutateAfterMating:
+224                 child1 = child1.mutate()
+225                 child2 = child2.mutate()
+226         
+227             children.extend([child1, child2])
+228     
+229         # if incestuous, add in best adults
+230         if self.incest:
+231             children.extend(self[:self.incest])
+232     
+233         children.sort()
+234     
+235         # and add in some mutants, a proportion of the children
+236         # with a bias toward the fittest
+237         if not self.mutateAfterMating:
+238             nchildren = len(children)
+239             n2children = nchildren * nchildren
+240             mutants = []
+241             numMutants = int(nchildren * self.mutants)
+242         
+243             if 1:
+244                 for i in xrange(numMutants):
+245                     # pick one parent randomly, favouring fittest
+246                     idx = int(sqrt(randrange(n2children)))
+247                     #child = children[nchildren - idx - 1]
+248                     child = children[-idx]
+249                     mutants.append(child.mutate())
+250             else:
+251                 for i in xrange(numMutants):
+252                     mutants.append(children[i].mutate())
+253         
+254             children.extend(mutants)
+255         
+256         # sort the children by fitness
+257         children.sort()
+258         
+259         # take the best 'nfittest', make them the new population
+260         self.organisms[:] = children[:nfittest]
+261     
+262         self.sorted = True
+263     
+264         #return stats
+265     def __repr__(self):
+266         """
+267         crude human-readable dump of population's members
+268         """
+269         return str(self.organisms)
+270     
+271     def __getitem__(self, n):
+272         """
+273         Return the nth member of this population,
+274         which we guarantee to be sorted in order from
+275         fittest first
+276         """
+277         self.sort()
+278         return self.organisms[n]
+279     
+280     def __len__(self):
+281         """
+282         return the number of organisms in this population
+283         """
+284         return len(self.organisms)
+285     
+286     def fitness(self):
+287         """
+288         returns the average fitness value for the population
+289         """
+290         self.fitnesses = [org.fitnessValue for org in self.organisms]
+291         return sum(self.fitnesses)/len(self.fitnesses)
+292     
+293     def best(self):
+294         """
+295         returns the fittest member of the population
+296         """
+297         self.sort()
+298         return self[0]
+299     
+300     def sort(self):
+301         """
+302         Sorts this population in order of fitness, with
+303         the fittest first.
+304         
+305         We keep track of whether this population is in order
+306         of fitness, so we don't perform unnecessary and
+307         costly sorting
+308         """
+309         if not self.sorted:
+310             self.organisms.sort()
+311             self.sorted = True
+312     
+313     def recordResult(self):
+314         
+315         raise Exception("Method 'recordResult' not implemented")

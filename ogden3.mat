@@ -1,0 +1,11 @@
+# Material file for Ogden-3 fit to UniaxialPlanar data.
+# Note: matname and density fields will be used while creating Abaqus input files.
+# Parameters are: u1 a1 u2 a2 u3 a3
+# Units should probably be N/mm^2 (depending on the model). Some parameters may be unitless.
+matname: ecoflex30
+density: 0.00107
+model:   ogden
+order:   3
+params:  0.001887 -3.848 0.02225 0.663 0.003574 4.225
+D:       2.93 0.0 0.0
+
